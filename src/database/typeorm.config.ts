@@ -10,10 +10,14 @@ let databaseUrl: string;
 
 if (process.env.NODE_ENV === 'production') {
   // En Railway, construir URL manualmente desde vars
-  databaseUrl = postgresql://:@:/quran_platform;
+  const user = process.env.PGUSER || '';
+  const password = process.env.PGPASSWORD || '';
+  const host = process.env.PGHOST || '';
+  const port = process.env.PGPORT || '5432';
+  databaseUrl = 'postgresql://' + user + ':' + password + '@' + host + ':' + port + '/quran_platform';
 } else {
   // En desarrollo, usar .env
-  databaseUrl = process.env.DATABASE_URL;
+  databaseUrl = process.env.DATABASE_URL || '';
 }
 
 export const typeormConfig: TypeOrmModuleOptions = {
