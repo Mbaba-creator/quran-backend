@@ -1,7 +1,10 @@
 ﻿import { TypeOrmModuleOptions } from '@nestjs/typeorm';
-import * as dotenv from 'dotenv';
 
-dotenv.config();
+// NO cargar .env en producción (Railway lo maneja)
+if (process.env.NODE_ENV !== 'production') {
+  const dotenv = require('dotenv');
+  dotenv.config();
+}
 
 export const typeormConfig: TypeOrmModuleOptions = {
   type: 'postgres',
