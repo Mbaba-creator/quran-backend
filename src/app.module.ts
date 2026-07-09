@@ -7,7 +7,11 @@ import { BibliotecaModule } from './modules/biblioteca/biblioteca.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forRoot(typeormConfig),
+    TypeOrmModule.forRoot({
+      ...typeormConfig,
+      retryAttempts: 0,
+      synchronize: false,
+    }),
     AuthModule,
     SalasModule,
     BibliotecaModule,

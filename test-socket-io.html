@@ -1,0 +1,141 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+  <title>Quran Chat Test</title>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <style>
+    body { font-family: Arial; margin: 20px; }
+    #messages { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: auto; margin-bottom: 10px; }
+    .message { margin: 5px 0; padding: 5px; background: #f0f0f0; border-radius: 5px; }
+    input { width: 80%; padding: 5px; }
+    button { padding: 5px 15px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Quran Learning Platform - Chat Test</h1>
+  
+  <div>
+    <h3>Create Sala</h3>
+    <input type="text" id="salaName" placeholder="Sala name">
+    <input type="text" id="salaType" placeholder="Type (e.g., hombres)">
+    <input type="text" id="salaLanguage" placeholder="Language (es)">
+    <button onclick="createSala()">Create Sala</button>
+  </div>
+
+  <div id="salaSection" style="display:none;">
+    <h3>Current Sala</h3>
+    <p>Sala ID: <span id="currentSalaId"></span></p>
+    <p>Members: <span id="memberCount">0</span></p>
+    
+    <h3>Messages</h3>
+    <div id="messages"></div>
+    
+    <input type="text" id="messageInput" placeholder="Type message...">
+    <button onclick="sendMessage()">Send</button>
+  </div>
+
+  <script>
+    const BACKEND_URL = 'https://quran-backend-xxxxx.railway.app'; // CHANGE THIS
+    let socket;
+    let currentSalaId;
+    let userId = 'user-' + Math.random().toString(36).substr(2, 9);
+    let displayName = 'Student ' + Math.floor(Math.random() * 1000);
+
+    function initSocket() {
+      socket = io(BACKEND_URL + '/salas', {
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        reconnectionAttempts: 5
+      });
+
+      socket.on('connect', () => {
+        console.log('Connected to socket:', socket.id);
+        addMessage('System', 'Connected to chat server');
+      });
+
+      socket.on('disconnect', () => {
+        console.log('Disconnected');
+        addMessage('System', 'Disconnected from server');
+      });
+
+      socket.on('sala-created', (sala) => {
+        console.log('Sala created:', sala);
+        addMessage('System', 'New sala created: ' + sala.name);
+      });
+
+      socket.on('new-message', (message) => {
+        addMessage(message.displayName, message.content);
+      });
+
+      socket.on('user-joined', (data) => {
+        addMessage('System', data.displayName + ' joined. Members: ' + data.members.length);
+        document.getElementById('memberCount').textContent = data.members.length;
+      });
+    }
+
+    function createSala() {
+      const name = document.getElementById('salaName').value;
+      const type = document.getElementById('salaType').value;
+      const language = document.getElementById('salaLanguage').value;
+
+      if (!name || !type || !language) {
+        alert('Fill all fields');
+        return;
+      }
+
+      if (!socket) initSocket();
+
+      socket.emit('create-sala', { name, type, language }, (sala) => {
+        currentSalaId = sala.id;
+        document.getElementById('currentSalaId').textContent = sala.id;
+        document.getElementById('salaSection').style.display = 'block';
+        document.getElementById('messages').innerHTML = '';
+
+        // Join sala
+        socket.emit('join-sala', {
+          salaId: sala.id,
+          userId: userId,
+          displayName: displayName
+        });
+
+        addMessage('System', 'Joined sala: ' + sala.name);
+      });
+    }
+
+    function sendMessage() {
+      const content = document.getElementById('messageInput').value;
+      if (!content || !currentSalaId) return;
+
+      socket.emit('send-message', {
+        salaId: currentSalaId,
+        userId: userId,
+        displayName: displayName,
+        content: content
+      });
+
+      document.getElementById('messageInput').value = '';
+    }
+
+    function addMessage(sender, text) {
+      const messagesDiv = document.getElementById('messages');
+      const msgEl = document.createElement('div');
+      msgEl.className = 'message';
+      msgEl.innerHTML = '<strong>' + sender + ':</strong> ' + text;
+      messagesDiv.appendChild(msgEl);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    // Auto-connect on load
+    window.onload = () => {
+      const salaName = prompt('Enter sala name (or leave blank to create manually):');
+      if (salaName) {
+        document.getElementById('salaName').value = salaName;
+        document.getElementById('salaType').value = 'general';
+        document.getElementById('salaLanguage').value = 'es';
+        createSala();
+      }
+    };
+  </script>
+</body>
+</html>
