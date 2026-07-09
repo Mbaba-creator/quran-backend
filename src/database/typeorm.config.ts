@@ -13,7 +13,7 @@ export const typeormConfig: TypeOrmModuleOptions = {
   password: process.env.PGPASSWORD || 'postgres',
   database: 'quran_platform',
   entities: [__dirname + '/../**/*.entity.ts'],
-  synchronize: process.env.NODE_ENV === 'development',
+  synchronize: true,
   logging: process.env.NODE_ENV === 'development',
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 };
