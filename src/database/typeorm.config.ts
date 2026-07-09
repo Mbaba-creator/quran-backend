@@ -5,21 +5,13 @@ if (process.env.NODE_ENV !== 'production') {
   dotenv.config();
 }
 
-let databaseUrl: string;
-
-if (process.env.NODE_ENV === 'production') {
-  const user = process.env.PGUSER || '';
-  const password = process.env.PGPASSWORD || '';
-  const host = process.env.PGHOST || '';
-  const port = process.env.PGPORT || '5432';
-  databaseUrl = 'postgresql://' + user + ':' + password + '@' + host + ':' + port + '/quran_platform';
-} else {
-  databaseUrl = process.env.DATABASE_URL || '';
-}
-
 export const typeormConfig: TypeOrmModuleOptions = {
   type: 'postgres',
-  url: databaseUrl,
+  host: process.env.PGHOST || 'localhost',
+  port: parseInt(process.env.PGPORT || '5432'),
+  username: process.env.PGUSER || 'postgres',
+  password: process.env.PGPASSWORD || 'postgres',
+  database: 'quran_platform',
   entities: [__dirname + '/../**/*.entity.ts'],
   synchronize: process.env.NODE_ENV === 'development',
   logging: process.env.NODE_ENV === 'development',
