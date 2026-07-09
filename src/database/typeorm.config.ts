@@ -7,7 +7,11 @@ if (process.env.NODE_ENV !== 'production') {
 
 export const typeormConfig: TypeOrmModuleOptions = {
   type: 'postgres',
-  url: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/quran_platform',
+  host: process.env.PGHOST || 'localhost',
+  port: parseInt(process.env.PGPORT || '5432', 10),
+  username: process.env.PGUSER || 'postgres',
+  password: process.env.PGPASSWORD || 'postgres',
+  database: 'quran_platform',
   entities: [__dirname + '/../**/*.entity.ts'],
   synchronize: true,
   logging: true,
