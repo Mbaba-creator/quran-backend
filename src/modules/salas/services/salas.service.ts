@@ -26,8 +26,10 @@ export class SalasService {
   }
 
   getSalaById(id: string): SalaDto {
-    return this.salas.get(id);
-  }
+  const sala = this.salas.get(id);
+  if (!sala) throw new Error('Sala not found');
+  return sala;
+}
 
   joinSala(salaId: string, dto: JoinSalaDto): SalaDto {
     const sala = this.salas.get(salaId);
