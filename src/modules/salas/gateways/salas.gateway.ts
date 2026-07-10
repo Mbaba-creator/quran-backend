@@ -27,46 +27,67 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
     console.log('User disconnected:', client.id);
   }
 
-  @SubscribeMessage('create-sala')
-  async handleCreateSala(
-    @MessageBody() data: { name: string; type: string; language: string },
-  ) {
-    const sala = await this.salasService.createSala(data.name, data.type, data.language);
-    this.server.emit('sala-created', sala);
-    return sala;
-  }
-
   @SubscribeMessage('get-salas')
   async handleGetSalas() {
     return await this.salasService.getSalas();
   }
 
-  @SubscribeMessage('join-sala')
-  async handleJoinSala(
-    @MessageBody() data: { salaId: string; userId: string; displayName: string },
+  @SubscribeMessage('create-sala')
+  async handleCreateSala(
+    @MessageBody() data: { name: string; type: string; language: string; teacherId: string },
+  ) {
+    const sala = await this.salasService.createSala(data.name, data.type, data.language, data.teacherId);
+    this.server.emit('sala-created', sala);
+    return sala;
+  }
+
+  @SubscribeMessage('start-live-class')
+  async handleStartLiveClass(
+    @MessageBody() data: { salaId: string; topic: string },
+  ) {
+    const sala = await this.salasService.startLiveClass(data.salaId, data.topic);
+    this.server.to(data.salaId).emit('class-started', sala);
+    return sala;
+  }
+
+  @SubscribeMessage('end-live-class')
+  async handleEndLiveClass(@MessageBody() data: { salaId: string }) {
+    const sala = await this.salasService.endLiveClass(data.salaId);
+    this.server.to(data.salaId).emit('class-ended', sala);
+    return sala;
+  }
+
+  @SubscribeMessage('join-class')
+  async handleJoinClass(
+    @MessageBody() data: { salaId: string; userId: string; displayName: string; role: 'teacher' | 'student' },
     @ConnectedSocket() client: Socket,
   ) {
-    const sala = await this.salasService.joinSala(data.salaId, data.userId);
+    const sala = await this.salasService.joinClass(data.salaId, data.userId, data.displayName, data.role);
     client.join(data.salaId);
     this.server.to(data.salaId).emit('user-joined', {
       userId: data.userId,
       displayName: data.displayName,
-      members: sala.members,
+      role: data.role,
+      members: sala.members.size,
+    });
+    return sala;
+  }
+
+  @SubscribeMessage('leave-class')
+  async handleLeaveClass(@MessageBody() data: { salaId: string; userId: string }) {
+    const sala = await this.salasService.leaveClass(data.salaId, data.userId);
+    this.server.to(data.salaId).emit('user-left', {
+      userId: data.userId,
+      members: sala.members.size,
     });
     return sala;
   }
 
   @SubscribeMessage('send-message')
   async handleSendMessage(
-    @MessageBody()
-    data: { salaId: string; userId: string; displayName: string; content: string },
+    @MessageBody() data: { salaId: string; userId: string; displayName: string; content: string },
   ) {
-    const message = await this.salasService.addMessage(
-      data.salaId,
-      data.userId,
-      data.displayName,
-      data.content,
-    );
+    const message = await this.salasService.addMessage(data.salaId, data.userId, data.displayName, data.content);
     this.server.to(data.salaId).emit('new-message', message);
     return message;
   }

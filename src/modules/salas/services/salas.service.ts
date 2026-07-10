@@ -3,7 +3,6 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Sala } from '../schemas/sala.schema';
 import { Message } from '../schemas/message.schema';
-import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class SalasService {
@@ -12,12 +11,15 @@ export class SalasService {
     @InjectModel(Message.name) private messageModel: Model<Message>,
   ) {}
 
-  async createSala(name: string, type: string, language: string) {
+  async createSala(name: string, type: string, language: string, teacherId: string) {
     const sala = await this.salaModel.create({
       name,
       type,
       language,
-      members: [],
+      teacherId: new Types.ObjectId(teacherId),
+      status: 'scheduled',
+      isLive: false,
+      members: new Map(),
     });
     return sala;
   }
@@ -30,20 +32,36 @@ export class SalasService {
     return await this.salaModel.findById(id);
   }
 
-  async joinSala(salaId: string, userId: string) {
+  async startLiveClass(salaId: string, topic: string) {
+    return await this.salaModel.findByIdAndUpdate(
+      salaId,
+      { isLive: true, status: 'active', topic },
+      { new: true }
+    );
+  }
+
+  async endLiveClass(salaId: string) {
+    return await this.salaModel.findByIdAndUpdate(
+      salaId,
+      { isLive: false, status: 'inactive' },
+      { new: true }
+    );
+  }
+
+  async joinClass(salaId: string, userId: string, displayName: string, role: 'teacher' | 'student') {
     const sala = await this.salaModel.findById(salaId);
     if (!sala) throw new Error('Sala not found');
-    if (!sala.members.includes(userId)) {
-      sala.members.push(userId);
-      await sala.save();
-    }
+    
+    sala.members.set(userId, JSON.stringify({ displayName, role }));
+    await sala.save();
     return sala;
   }
 
-  async leaveSala(salaId: string, userId: string) {
+  async leaveClass(salaId: string, userId: string) {
     const sala = await this.salaModel.findById(salaId);
     if (!sala) throw new Error('Sala not found');
-    sala.members = sala.members.filter(m => m !== userId);
+    
+    sala.members.delete(userId);
     await sala.save();
     return sala;
   }
