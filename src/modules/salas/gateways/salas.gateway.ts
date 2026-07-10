@@ -9,8 +9,6 @@
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { SalasService } from '../services/salas.service';
-import { MessageDto } from '../dto/sala.dto';
-import { v4 as uuidv4 } from 'uuid';
 
 @WebSocketGateway({
   namespace: '/salas',
@@ -30,28 +28,25 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('create-sala')
-  handleCreateSala(
+  async handleCreateSala(
     @MessageBody() data: { name: string; type: string; language: string },
   ) {
-    const sala = this.salasService.createSala(data);
+    const sala = await this.salasService.createSala(data.name, data.type, data.language);
     this.server.emit('sala-created', sala);
     return sala;
   }
 
   @SubscribeMessage('get-salas')
-  handleGetSalas() {
-    return this.salasService.getSalas();
+  async handleGetSalas() {
+    return await this.salasService.getSalas();
   }
 
   @SubscribeMessage('join-sala')
-  handleJoinSala(
+  async handleJoinSala(
     @MessageBody() data: { salaId: string; userId: string; displayName: string },
     @ConnectedSocket() client: Socket,
   ) {
-    const sala = this.salasService.joinSala(data.salaId, {
-      userId: data.userId,
-      displayName: data.displayName,
-    });
+    const sala = await this.salasService.joinSala(data.salaId, data.userId);
     client.join(data.salaId);
     this.server.to(data.salaId).emit('user-joined', {
       userId: data.userId,
@@ -62,25 +57,22 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('send-message')
-  handleSendMessage(
+  async handleSendMessage(
     @MessageBody()
     data: { salaId: string; userId: string; displayName: string; content: string },
   ) {
-    const message: MessageDto = {
-      id: uuidv4(),
-      salaId: data.salaId,
-      userId: data.userId,
-      displayName: data.displayName,
-      content: data.content,
-      createdAt: new Date(),
-    };
-    this.salasService.addMessage(data.salaId, message);
+    const message = await this.salasService.addMessage(
+      data.salaId,
+      data.userId,
+      data.displayName,
+      data.content,
+    );
     this.server.to(data.salaId).emit('new-message', message);
     return message;
   }
 
   @SubscribeMessage('get-messages')
-  handleGetMessages(@MessageBody() data: { salaId: string }) {
-    return this.salasService.getMessages(data.salaId);
+  async handleGetMessages(@MessageBody() data: { salaId: string }) {
+    return await this.salasService.getMessages(data.salaId);
   }
 }

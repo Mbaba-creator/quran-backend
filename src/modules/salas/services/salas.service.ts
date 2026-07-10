@@ -1,60 +1,64 @@
 ﻿import { Injectable } from '@nestjs/common';
-import { SalaDto, MessageDto, CreateSalaDto, JoinSalaDto } from '../dto/sala.dto';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, Types } from 'mongoose';
+import { Sala } from '../schemas/sala.schema';
+import { Message } from '../schemas/message.schema';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class SalasService {
-  private salas = new Map<string, SalaDto>();
-  private messages = new Map<string, MessageDto[]>();
+  constructor(
+    @InjectModel(Sala.name) private salaModel: Model<Sala>,
+    @InjectModel(Message.name) private messageModel: Model<Message>,
+  ) {}
 
-  createSala(dto: CreateSalaDto): SalaDto {
-    const sala: SalaDto = {
-      id: uuidv4(),
-      name: dto.name,
-      type: dto.type,
-      language: dto.language,
-      createdAt: new Date(),
+  async createSala(name: string, type: string, language: string) {
+    const sala = await this.salaModel.create({
+      name,
+      type,
+      language,
       members: [],
-    };
-    this.salas.set(sala.id, sala);
-    this.messages.set(sala.id, []);
+    });
     return sala;
   }
 
-  getSalas(): SalaDto[] {
-    return Array.from(this.salas.values());
+  async getSalas() {
+    return await this.salaModel.find();
   }
 
-  getSalaById(id: string): SalaDto {
-  const sala = this.salas.get(id);
-  if (!sala) throw new Error('Sala not found');
-  return sala;
-}
+  async getSalaById(id: string) {
+    return await this.salaModel.findById(id);
+  }
 
-  joinSala(salaId: string, dto: JoinSalaDto): SalaDto {
-    const sala = this.salas.get(salaId);
+  async joinSala(salaId: string, userId: string) {
+    const sala = await this.salaModel.findById(salaId);
     if (!sala) throw new Error('Sala not found');
-    if (!sala.members.includes(dto.userId)) {
-      sala.members.push(dto.userId);
+    if (!sala.members.includes(userId)) {
+      sala.members.push(userId);
+      await sala.save();
     }
     return sala;
   }
 
-  leaveSala(salaId: string, userId: string): SalaDto {
-    const sala = this.salas.get(salaId);
+  async leaveSala(salaId: string, userId: string) {
+    const sala = await this.salaModel.findById(salaId);
     if (!sala) throw new Error('Sala not found');
     sala.members = sala.members.filter(m => m !== userId);
+    await sala.save();
     return sala;
   }
 
-  addMessage(salaId: string, message: MessageDto): MessageDto {
-    const messages = this.messages.get(salaId) || [];
-    messages.push(message);
-    this.messages.set(salaId, messages);
+  async addMessage(salaId: string, userId: string, displayName: string, content: string) {
+    const message = await this.messageModel.create({
+      salaId: new Types.ObjectId(salaId),
+      userId,
+      displayName,
+      content,
+    });
     return message;
   }
 
-  getMessages(salaId: string): MessageDto[] {
-    return this.messages.get(salaId) || [];
+  async getMessages(salaId: string) {
+    return await this.messageModel.find({ salaId: new Types.ObjectId(salaId) });
   }
 }
