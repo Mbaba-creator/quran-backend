@@ -28,15 +28,32 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('get-salas')
-  async handleGetSalas() {
-    return await this.salasService.getSalas();
+  async handleGetSalas(
+    @MessageBody() data: { gender: 'men' | 'women'; parentId?: string | null },
+  ) {
+    return await this.salasService.getSalas(data.gender, data.parentId || null);
   }
 
   @SubscribeMessage('create-sala')
   async handleCreateSala(
-    @MessageBody() data: { name: string; type: string; language: string; teacherId: string },
+    @MessageBody()
+    data: {
+      name: string;
+      type: string;
+      language: string;
+      teacherId: string;
+      gender: 'men' | 'women';
+      parentId?: string | null;
+    },
   ) {
-    const sala = await this.salasService.createSala(data.name, data.type, data.language, data.teacherId);
+    const sala = await this.salasService.createSala(
+      data.name,
+      data.type,
+      data.language,
+      data.teacherId,
+      data.gender,
+      data.parentId || null,
+    );
     this.server.emit('sala-created', sala);
     return sala;
   }

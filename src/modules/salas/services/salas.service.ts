@@ -11,12 +11,21 @@ export class SalasService {
     @InjectModel(Message.name) private messageModel: Model<Message>,
   ) {}
 
-  async createSala(name: string, type: string, language: string, teacherId: string) {
+  async createSala(
+    name: string,
+    type: string,
+    language: string,
+    teacherId: string,
+    gender: 'men' | 'women',
+    parentId: string | null = null,
+  ) {
     const sala = await this.salaModel.create({
       name,
       type,
       language,
-      teacherId: new Types.ObjectId(teacherId),
+      gender,
+      teacherId: teacherId ? new Types.ObjectId(teacherId) : undefined,
+      parentId: parentId ? new Types.ObjectId(parentId) : null,
       status: 'scheduled',
       isLive: false,
       members: new Map(),
@@ -24,8 +33,10 @@ export class SalasService {
     return sala;
   }
 
-  async getSalas() {
-    return await this.salaModel.find();
+  async getSalas(gender: 'men' | 'women', parentId: string | null = null) {
+    const filter: any = { gender };
+    filter.parentId = parentId ? new Types.ObjectId(parentId) : null;
+    return await this.salaModel.find(filter);
   }
 
   async getSalaById(id: string) {
@@ -51,7 +62,7 @@ export class SalasService {
   async joinClass(salaId: string, userId: string, displayName: string, role: 'teacher' | 'student') {
     const sala = await this.salaModel.findById(salaId);
     if (!sala) throw new Error('Sala not found');
-    
+
     sala.members.set(userId, JSON.stringify({ displayName, role }));
     await sala.save();
     return sala;
@@ -60,7 +71,7 @@ export class SalasService {
   async leaveClass(salaId: string, userId: string) {
     const sala = await this.salaModel.findById(salaId);
     if (!sala) throw new Error('Sala not found');
-    
+
     sala.members.delete(userId);
     await sala.save();
     return sala;

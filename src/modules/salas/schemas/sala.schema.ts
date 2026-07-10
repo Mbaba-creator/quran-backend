@@ -9,8 +9,14 @@ export class Sala extends Document {
   @Prop({ required: true })
   type: string;
 
-  @Prop({ required: true })
+  @Prop({ enum: ['ar', 'en'], required: true })
   language: string;
+
+  @Prop({ enum: ['men', 'women'], required: true })
+  gender: string;
+
+  @Prop({ type: Types.ObjectId, ref: 'Sala', default: null })
+  parentId: Types.ObjectId | null;
 
   @Prop({ type: Types.ObjectId, ref: 'User' })
   teacherId: Types.ObjectId;
