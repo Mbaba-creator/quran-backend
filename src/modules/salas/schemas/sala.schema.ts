@@ -1,4 +1,4 @@
-﻿import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
 @Schema()
@@ -15,7 +15,7 @@ export class Sala extends Document {
   @Prop({ enum: ['men', 'women'], required: true })
   gender: string;
 
-  @Prop({ default: null })
+  @Prop({ type: String, default: null })
   surahName: string | null;
 
   @Prop({ type: Types.ObjectId, ref: 'Sala', default: null })
@@ -44,3 +44,5 @@ export class Sala extends Document {
 }
 
 export const SalaSchema = SchemaFactory.createForClass(Sala);
+
+
