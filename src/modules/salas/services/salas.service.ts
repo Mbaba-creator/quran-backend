@@ -3,27 +3,31 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Sala } from '../schemas/sala.schema';
 import { Message } from '../schemas/message.schema';
+import { Review } from '../schemas/review.schema';
 
 @Injectable()
 export class SalasService {
   constructor(
     @InjectModel(Sala.name) private salaModel: Model<Sala>,
     @InjectModel(Message.name) private messageModel: Model<Message>,
+    @InjectModel(Review.name) private reviewModel: Model<Review>,
   ) {}
 
   async createSala(
     name: string,
-    type: string,
+    type: 'memorization_review' | 'recitation_correction',
     language: string,
     teacherId: string,
     gender: 'men' | 'women',
     parentId: string | null = null,
+    surahName: string | null = null,
   ) {
     const sala = await this.salaModel.create({
       name,
       type,
       language,
       gender,
+      surahName,
       teacherId: teacherId ? new Types.ObjectId(teacherId) : undefined,
       parentId: parentId ? new Types.ObjectId(parentId) : null,
       status: 'scheduled',
@@ -33,9 +37,10 @@ export class SalasService {
     return sala;
   }
 
-  async getSalas(gender: 'men' | 'women', parentId: string | null = null) {
+  async getSalas(gender: 'men' | 'women', parentId: string | null = null, surahName: string | null = null) {
     const filter: any = { gender };
     filter.parentId = parentId ? new Types.ObjectId(parentId) : null;
+    if (surahName) filter.surahName = surahName;
     return await this.salaModel.find(filter);
   }
 
@@ -89,5 +94,30 @@ export class SalasService {
 
   async getMessages(salaId: string) {
     return await this.messageModel.find({ salaId: new Types.ObjectId(salaId) });
+  }
+
+  async submitReview(
+    salaId: string,
+    studentId: string,
+    studentName: string,
+    teacherId: string,
+    teacherName: string,
+    surahName: string,
+    result: 'approved' | 'needs_practice',
+  ) {
+    const review = await this.reviewModel.create({
+      salaId: new Types.ObjectId(salaId),
+      studentId,
+      studentName,
+      teacherId: teacherId ? new Types.ObjectId(teacherId) : undefined,
+      teacherName,
+      surahName,
+      result,
+    });
+    return review;
+  }
+
+  async getReviewsByStudent(studentId: string) {
+    return await this.reviewModel.find({ studentId }).sort({ createdAt: -1 });
   }
 }

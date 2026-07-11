@@ -6,7 +6,7 @@ export class Sala extends Document {
   @Prop({ required: true })
   name: string;
 
-  @Prop({ required: true })
+  @Prop({ enum: ['memorization_review', 'recitation_correction'], required: true })
   type: string;
 
   @Prop({ enum: ['ar', 'en'], required: true })
@@ -14,6 +14,9 @@ export class Sala extends Document {
 
   @Prop({ enum: ['men', 'women'], required: true })
   gender: string;
+
+  @Prop({ default: null })
+  surahName: string | null;
 
   @Prop({ type: Types.ObjectId, ref: 'Sala', default: null })
   parentId: Types.ObjectId | null;

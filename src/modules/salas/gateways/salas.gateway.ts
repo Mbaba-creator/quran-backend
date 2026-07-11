@@ -29,9 +29,9 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('get-salas')
   async handleGetSalas(
-    @MessageBody() data: { gender: 'men' | 'women'; parentId?: string | null },
+    @MessageBody() data: { gender: 'men' | 'women'; parentId?: string | null; surahName?: string | null },
   ) {
-    return await this.salasService.getSalas(data.gender, data.parentId || null);
+    return await this.salasService.getSalas(data.gender, data.parentId || null, data.surahName || null);
   }
 
   @SubscribeMessage('create-sala')
@@ -39,11 +39,12 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody()
     data: {
       name: string;
-      type: string;
+      type: 'memorization_review' | 'recitation_correction';
       language: string;
       teacherId: string;
       gender: 'men' | 'women';
       parentId?: string | null;
+      surahName?: string | null;
     },
   ) {
     const sala = await this.salasService.createSala(
@@ -53,6 +54,7 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
       data.teacherId,
       data.gender,
       data.parentId || null,
+      data.surahName || null,
     );
     this.server.emit('sala-created', sala);
     return sala;
@@ -112,5 +114,36 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('get-messages')
   async handleGetMessages(@MessageBody() data: { salaId: string }) {
     return await this.salasService.getMessages(data.salaId);
+  }
+
+  @SubscribeMessage('submit-review')
+  async handleSubmitReview(
+    @MessageBody()
+    data: {
+      salaId: string;
+      studentId: string;
+      studentName: string;
+      teacherId: string;
+      teacherName: string;
+      surahName: string;
+      result: 'approved' | 'needs_practice';
+    },
+  ) {
+    const review = await this.salasService.submitReview(
+      data.salaId,
+      data.studentId,
+      data.studentName,
+      data.teacherId,
+      data.teacherName,
+      data.surahName,
+      data.result,
+    );
+    this.server.to(data.salaId).emit('review-received', review);
+    return review;
+  }
+
+  @SubscribeMessage('get-my-reviews')
+  async handleGetMyReviews(@MessageBody() data: { studentId: string }) {
+    return await this.salasService.getReviewsByStudent(data.studentId);
   }
 }
