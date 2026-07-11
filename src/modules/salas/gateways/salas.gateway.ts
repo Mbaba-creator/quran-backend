@@ -8,7 +8,11 @@
   MessageBody,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { JwtService } from '@nestjs/jwt';
 import { SalasService } from '../services/salas.service';
+import { User } from '../../auth/schemas/user.schema';
 
 @WebSocketGateway({
   namespace: '/salas',
@@ -17,42 +21,95 @@ import { SalasService } from '../services/salas.service';
 export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer() server: Server;
 
-  constructor(private salasService: SalasService) {}
+  constructor(
+    private salasService: SalasService,
+    private jwtService: JwtService,
+    @InjectModel(User.name) private userModel: Model<User>,
+  ) {}
 
-  handleConnection(client: Socket) {
-    console.log('User connected:', client.id);
+  async handleConnection(client: Socket) {
+    try {
+      const token =
+        (client.handshake.auth && client.handshake.auth.token) ||
+        (client.handshake.headers.authorization || '').replace('Bearer ', '');
+
+      if (!token) {
+        client.emit('auth-error', { message: 'No token provided' });
+        client.disconnect();
+        return;
+      }
+
+      const payload = this.jwtService.verify(token, {
+        secret: process.env.JWT_SECRET || 'dev-secret',
+      });
+
+      const user = await this.userModel.findById(payload.sub);
+      if (!user || user.deleted_at) {
+        client.emit('auth-error', { message: 'User not found' });
+        client.disconnect();
+        return;
+      }
+
+      if (user.isBanned) {
+        client.emit('banned', { reason: user.banReason || 'Your account has been suspended' });
+        client.disconnect();
+        return;
+      }
+
+      client.data.user = {
+        userId: (user._id as any).toString(),
+        displayName: user.display_name,
+        email: user.email,
+        role: user.role,
+        gender: user.gender,
+      };
+
+      console.log('Authenticated connection:', client.data.user.displayName, client.data.user.role, client.data.user.gender);
+    } catch (err) {
+      client.emit('auth-error', { message: 'Invalid or expired token' });
+      client.disconnect();
+    }
   }
 
   handleDisconnect(client: Socket) {
-    console.log('User disconnected:', client.id);
+    console.log('User disconnected:', client.data.user ? client.data.user.displayName : client.id);
   }
 
   @SubscribeMessage('get-salas')
   async handleGetSalas(
-    @MessageBody() data: { gender: 'men' | 'women'; parentId?: string | null; surahName?: string | null },
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { parentId?: string | null; surahName?: string | null },
   ) {
-    return await this.salasService.getSalas(data.gender, data.parentId || null, data.surahName || null);
+    const user = client.data.user;
+    if (!user) return { error: 'Not authenticated' };
+    return await this.salasService.getSalas(user.gender, data.parentId || null, data.surahName || null);
   }
 
   @SubscribeMessage('create-sala')
   async handleCreateSala(
+    @ConnectedSocket() client: Socket,
     @MessageBody()
     data: {
       name: string;
       type: 'memorization_review' | 'recitation_correction';
       language: string;
-      teacherId: string;
-      gender: 'men' | 'women';
       parentId?: string | null;
       surahName?: string | null;
     },
   ) {
+    const user = client.data.user;
+    if (!user) return { error: 'Not authenticated' };
+    if (user.role !== 'teacher') {
+      client.emit('app-error', { message: 'Only teachers can create rooms' });
+      return { error: 'Forbidden' };
+    }
+
     const sala = await this.salasService.createSala(
       data.name,
       data.type,
       data.language,
-      data.teacherId,
-      data.gender,
+      user.userId,
+      user.gender,
       data.parentId || null,
       data.surahName || null,
     );
@@ -62,15 +119,26 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('start-live-class')
   async handleStartLiveClass(
+    @ConnectedSocket() client: Socket,
     @MessageBody() data: { salaId: string; topic: string },
   ) {
+    const user = client.data.user;
+    if (!user || user.role !== 'teacher') {
+      client.emit('app-error', { message: 'Only teachers can start a live class' });
+      return;
+    }
     const sala = await this.salasService.startLiveClass(data.salaId, data.topic);
     this.server.to(data.salaId).emit('class-started', sala);
     return sala;
   }
 
   @SubscribeMessage('end-live-class')
-  async handleEndLiveClass(@MessageBody() data: { salaId: string }) {
+  async handleEndLiveClass(@ConnectedSocket() client: Socket, @MessageBody() data: { salaId: string }) {
+    const user = client.data.user;
+    if (!user || user.role !== 'teacher') {
+      client.emit('app-error', { message: 'Only teachers can end a live class' });
+      return;
+    }
     const sala = await this.salasService.endLiveClass(data.salaId);
     this.server.to(data.salaId).emit('class-ended', sala);
     return sala;
@@ -78,25 +146,37 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('join-class')
   async handleJoinClass(
-    @MessageBody() data: { salaId: string; userId: string; displayName: string; role: 'teacher' | 'student' },
+    @MessageBody() data: { salaId: string },
     @ConnectedSocket() client: Socket,
   ) {
-    const sala = await this.salasService.joinClass(data.salaId, data.userId, data.displayName, data.role);
+    const user = client.data.user;
+    if (!user) return { error: 'Not authenticated' };
+
+    const targetSala = await this.salasService.getSalaById(data.salaId);
+    if (!targetSala) return { error: 'Sala not found' };
+    if (targetSala.gender !== user.gender) {
+      client.emit('app-error', { message: 'You cannot join a room from the other section' });
+      return { error: 'Forbidden' };
+    }
+
+    const sala = await this.salasService.joinClass(data.salaId, user.userId, user.displayName, user.role as any);
     client.join(data.salaId);
     this.server.to(data.salaId).emit('user-joined', {
-      userId: data.userId,
-      displayName: data.displayName,
-      role: data.role,
+      userId: user.userId,
+      displayName: user.displayName,
+      role: user.role,
       members: sala.members.size,
     });
     return sala;
   }
 
   @SubscribeMessage('leave-class')
-  async handleLeaveClass(@MessageBody() data: { salaId: string; userId: string }) {
-    const sala = await this.salasService.leaveClass(data.salaId, data.userId);
+  async handleLeaveClass(@ConnectedSocket() client: Socket, @MessageBody() data: { salaId: string }) {
+    const user = client.data.user;
+    if (!user) return;
+    const sala = await this.salasService.leaveClass(data.salaId, user.userId);
     this.server.to(data.salaId).emit('user-left', {
-      userId: data.userId,
+      userId: user.userId,
       members: sala.members.size,
     });
     return sala;
@@ -104,9 +184,12 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('send-message')
   async handleSendMessage(
-    @MessageBody() data: { salaId: string; userId: string; displayName: string; content: string },
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { salaId: string; content: string },
   ) {
-    const message = await this.salasService.addMessage(data.salaId, data.userId, data.displayName, data.content);
+    const user = client.data.user;
+    if (!user) return;
+    const message = await this.salasService.addMessage(data.salaId, user.userId, user.displayName, data.content);
     this.server.to(data.salaId).emit('new-message', message);
     return message;
   }
@@ -118,23 +201,27 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('submit-review')
   async handleSubmitReview(
+    @ConnectedSocket() client: Socket,
     @MessageBody()
     data: {
       salaId: string;
       studentId: string;
       studentName: string;
-      teacherId: string;
-      teacherName: string;
       surahName: string;
       result: 'approved' | 'needs_practice';
     },
   ) {
+    const user = client.data.user;
+    if (!user || user.role !== 'teacher') {
+      client.emit('app-error', { message: 'Only teachers can submit reviews' });
+      return;
+    }
     const review = await this.salasService.submitReview(
       data.salaId,
       data.studentId,
       data.studentName,
-      data.teacherId,
-      data.teacherName,
+      user.userId,
+      user.displayName,
       data.surahName,
       data.result,
     );
@@ -143,7 +230,27 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('get-my-reviews')
-  async handleGetMyReviews(@MessageBody() data: { studentId: string }) {
-    return await this.salasService.getReviewsByStudent(data.studentId);
+  async handleGetMyReviews(@ConnectedSocket() client: Socket) {
+    const user = client.data.user;
+    if (!user) return [];
+    return await this.salasService.getReviewsByStudent(user.userId);
+  }
+
+  @SubscribeMessage('report-user')
+  async handleReportUser(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { reportedUserId: string; reportedUserName: string; salaId: string | null; reason: string },
+  ) {
+    const user = client.data.user;
+    if (!user) return { error: 'Not authenticated' };
+    const report = await this.salasService.submitReport(
+      user.userId,
+      user.displayName,
+      data.reportedUserId,
+      data.reportedUserName,
+      data.salaId,
+      data.reason,
+    );
+    return { success: true, reportId: report._id };
   }
 }

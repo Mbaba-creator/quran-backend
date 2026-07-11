@@ -1,4 +1,4 @@
-﻿import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
+﻿import { Injectable, BadRequestException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { JwtService } from '@nestjs/jwt';
@@ -12,10 +12,13 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async register(email: string, password: string, displayName: string) {
+  async register(email: string, password: string, displayName: string, gender: 'men' | 'women') {
     const existingUser = await this.userModel.findOne({ email });
     if (existingUser) {
       throw new BadRequestException('Email already registered');
+    }
+    if (gender !== 'men' && gender !== 'women') {
+      throw new BadRequestException('Gender must be men or women');
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -23,6 +26,7 @@ export class AuthService {
       email,
       password_hash: passwordHash,
       display_name: displayName,
+      gender,
     });
 
     return this.generateToken(user);
@@ -39,11 +43,15 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    if (user.isBanned) {
+      throw new ForbiddenException(user.banReason || 'Account suspended');
+    }
+
     return this.generateToken(user);
   }
 
   private generateToken(user: any) {
-    const payload = { sub: user._id, email: user.email, role: user.role };
+    const payload = { sub: user._id, email: user.email, role: user.role, gender: user.gender };
     return {
       access_token: this.jwtService.sign(payload),
       user: {
@@ -51,6 +59,7 @@ export class AuthService {
         email: user.email,
         display_name: user.display_name,
         role: user.role,
+        gender: user.gender,
       },
     };
   }

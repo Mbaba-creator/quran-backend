@@ -4,6 +4,7 @@ import { Model, Types } from 'mongoose';
 import { Sala } from '../schemas/sala.schema';
 import { Message } from '../schemas/message.schema';
 import { Review } from '../schemas/review.schema';
+import { Report } from '../schemas/report.schema';
 
 @Injectable()
 export class SalasService {
@@ -11,6 +12,7 @@ export class SalasService {
     @InjectModel(Sala.name) private salaModel: Model<Sala>,
     @InjectModel(Message.name) private messageModel: Model<Message>,
     @InjectModel(Review.name) private reviewModel: Model<Review>,
+    @InjectModel(Report.name) private reportModel: Model<Report>,
   ) {}
 
   async createSala(
@@ -119,5 +121,24 @@ export class SalasService {
 
   async getReviewsByStudent(studentId: string) {
     return await this.reviewModel.find({ studentId }).sort({ createdAt: -1 });
+  }
+
+  async submitReport(
+    reporterId: string,
+    reporterName: string,
+    reportedUserId: string,
+    reportedUserName: string,
+    salaId: string | null,
+    reason: string,
+  ) {
+    const report = await this.reportModel.create({
+      reporterId,
+      reporterName,
+      reportedUserId,
+      reportedUserName,
+      salaId: salaId ? new Types.ObjectId(salaId) : undefined,
+      reason,
+    });
+    return report;
   }
 }

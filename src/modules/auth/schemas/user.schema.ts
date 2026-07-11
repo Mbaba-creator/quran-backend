@@ -15,11 +15,20 @@ export class User extends Document {
   @Prop({ default: 'student' })
   role: string;
 
+  @Prop({ enum: ['men', 'women'], required: true })
+  gender: string;
+
   @Prop({ default: 'es' })
   language: string;
 
   @Prop()
   avatar_url: string;
+
+  @Prop({ default: false })
+  isBanned: boolean;
+
+  @Prop({ default: null })
+  banReason: string;
 
   @Prop({ default: Date.now })
   created_at: Date;
