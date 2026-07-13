@@ -7,9 +7,28 @@ export class AuthController {
 
   @Post('register')
   async register(
-    @Body() body: { email: string; password: string; displayName: string; gender: 'men' | 'women' },
+    @Body()
+    body: {
+      email: string;
+      password: string;
+      displayName: string;
+      gender: 'men' | 'women';
+      role?: 'student' | 'teacher';
+      hasTaughtBefore?: boolean;
+      isHafiz?: boolean;
+      teacherExperience?: string;
+    },
   ) {
-    return this.authService.register(body.email, body.password, body.displayName, body.gender);
+    return this.authService.register(
+      body.email,
+      body.password,
+      body.displayName,
+      body.gender,
+      body.role || 'student',
+      body.hasTaughtBefore || false,
+      body.isHafiz || false,
+      body.teacherExperience || '',
+    );
   }
 
   @Post('login')

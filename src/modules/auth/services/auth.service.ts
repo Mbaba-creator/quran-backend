@@ -12,13 +12,25 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async register(email: string, password: string, displayName: string, gender: 'men' | 'women') {
+  async register(
+    email: string,
+    password: string,
+    displayName: string,
+    gender: 'men' | 'women',
+    role: 'student' | 'teacher' = 'student',
+    hasTaughtBefore = false,
+    isHafiz = false,
+    teacherExperience = '',
+  ) {
     const existingUser = await this.userModel.findOne({ email });
     if (existingUser) {
       throw new BadRequestException('Email already registered');
     }
     if (gender !== 'men' && gender !== 'women') {
       throw new BadRequestException('Gender must be men or women');
+    }
+    if (role !== 'student' && role !== 'teacher') {
+      throw new BadRequestException('Invalid role');
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -27,6 +39,10 @@ export class AuthService {
       password_hash: passwordHash,
       display_name: displayName,
       gender,
+      role,
+      hasTaughtBefore: role === 'teacher' ? hasTaughtBefore : false,
+      isHafiz: role === 'teacher' ? isHafiz : false,
+      teacherExperience: role === 'teacher' ? teacherExperience : '',
     });
 
     return this.generateToken(user);

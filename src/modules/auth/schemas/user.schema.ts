@@ -18,6 +18,15 @@ export class User extends Document {
   @Prop({ enum: ['men', 'women'], required: true })
   gender: string;
 
+  @Prop({ default: false })
+  hasTaughtBefore: boolean;
+
+  @Prop({ default: false })
+  isHafiz: boolean;
+
+  @Prop({ default: '' })
+  teacherExperience: string;
+
   @Prop({ default: 'es' })
   language: string;
 
