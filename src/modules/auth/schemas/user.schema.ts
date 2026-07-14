@@ -6,8 +6,11 @@ export class User extends Document {
   @Prop({ required: true, unique: true })
   email: string;
 
-  @Prop({ required: true })
+  @Prop({ required: false })
   password_hash: string;
+
+  @Prop({ required: false, unique: true, sparse: true })
+  googleId: string;
 
   @Prop()
   display_name: string;

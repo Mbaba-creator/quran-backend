@@ -53,6 +53,9 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
+    if (!user.password_hash) {
+      throw new UnauthorizedException('This account uses Google sign-in');
+    }
 
     const isValidPassword = await bcrypt.compare(password, user.password_hash);
     if (!isValidPassword) {
@@ -62,6 +65,67 @@ export class AuthService {
     if (user.isBanned) {
       throw new ForbiddenException(user.banReason || 'Account suspended');
     }
+
+    return this.generateToken(user);
+  }
+
+  async handleGoogleLogin(googleId: string, email: string, name: string) {
+    let user = await this.userModel.findOne({ googleId });
+    if (!user) {
+      user = await this.userModel.findOne({ email });
+    }
+
+    if (user) {
+      if (!user.googleId) {
+        user.googleId = googleId;
+        await user.save();
+      }
+      if (user.isBanned) {
+        return { error: user.banReason || 'Account suspended' };
+      }
+      return { existing: true, ...this.generateToken(user) };
+    }
+
+    const pendingToken = this.jwtService.sign(
+      { googleId, email, name, purpose: 'google_pending' },
+      { expiresIn: '10m' },
+    );
+    return { existing: false, pendingToken, profile: { email, name } };
+  }
+
+  async completeGoogleRegistration(
+    pendingToken: string,
+    gender: 'men' | 'women',
+    role: 'student' | 'teacher' = 'student',
+    hasTaughtBefore = false,
+    isHafiz = false,
+    teacherExperience = '',
+  ) {
+    let payload: any;
+    try {
+      payload = this.jwtService.verify(pendingToken);
+    } catch (e) {
+      throw new BadRequestException('Invalid or expired session, please try Google sign-in again');
+    }
+    if (payload.purpose !== 'google_pending') {
+      throw new BadRequestException('Invalid token');
+    }
+
+    const existingUser = await this.userModel.findOne({ email: payload.email });
+    if (existingUser) {
+      throw new BadRequestException('Email already registered');
+    }
+
+    const user = await this.userModel.create({
+      email: payload.email,
+      googleId: payload.googleId,
+      display_name: payload.name,
+      gender,
+      role,
+      hasTaughtBefore: role === 'teacher' ? hasTaughtBefore : false,
+      isHafiz: role === 'teacher' ? isHafiz : false,
+      teacherExperience: role === 'teacher' ? teacherExperience : '',
+    });
 
     return this.generateToken(user);
   }
