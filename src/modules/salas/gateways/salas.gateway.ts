@@ -1,4 +1,4 @@
-﻿import {
+import {
   WebSocketGateway,
   WebSocketServer,
   SubscribeMessage,
@@ -338,7 +338,7 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('force-mute')
   handleForceMute(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { salaId: string; targetUserId: string },
+    @MessageBody() data: { salaId: string; targetUserId: string; muted: boolean },
   ) {
     const user = client.data.user;
     if (!user || user.role !== 'teacher') {
@@ -347,8 +347,9 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
     const targetSocketId = this.userSockets.get(data.targetUserId);
     if (targetSocketId) {
-      this.server.to(targetSocketId).emit('force-muted', {});
+      this.server.to(targetSocketId).emit('force-mute-state', { muted: data.muted });
     }
-    this.server.to(data.salaId).emit('participant-muted', { userId: data.targetUserId });
+    this.server.to(data.salaId).emit('participant-mute-changed', { userId: data.targetUserId, muted: data.muted });
   }
 }
+
