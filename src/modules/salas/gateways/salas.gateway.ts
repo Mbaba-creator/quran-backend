@@ -21,6 +21,8 @@ import { User } from '../../auth/schemas/user.schema';
 export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer() server: Server;
 
+  private userSockets = new Map<string, string>();
+
   constructor(
     private salasService: SalasService,
     private jwtService: JwtService,
@@ -64,6 +66,8 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
         gender: user.gender,
       };
 
+      this.userSockets.set(client.data.user.userId, client.id);
+
       console.log('Authenticated connection:', client.data.user.displayName, client.data.user.role, client.data.user.gender);
     } catch (err) {
       client.emit('auth-error', { message: 'Invalid or expired token' });
@@ -72,7 +76,13 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   handleDisconnect(client: Socket) {
-    console.log('User disconnected:', client.data.user ? client.data.user.displayName : client.id);
+    if (client.data.user) {
+      const uid = client.data.user.userId;
+      if (this.userSockets.get(uid) === client.id) {
+        this.userSockets.delete(uid);
+      }
+      console.log('User disconnected:', client.data.user.displayName);
+    }
   }
 
   @SubscribeMessage('get-salas')
@@ -175,6 +185,8 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const user = client.data.user;
     if (!user) return;
     const sala = await this.salasService.leaveClass(data.salaId, user.userId);
+    client.to(data.salaId).emit('peer-left-audio', { userId: user.userId });
+    client.leave(data.salaId);
     this.server.to(data.salaId).emit('user-left', {
       userId: user.userId,
       members: sala.members.size,
@@ -252,5 +264,91 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
       data.reason,
     );
     return { success: true, reportId: report._id };
+  }
+
+  // ===== WebRTC signaling relay (mesh, small groups) =====
+
+  @SubscribeMessage('join-audio')
+  handleJoinAudio(@ConnectedSocket() client: Socket, @MessageBody() data: { salaId: string }) {
+    const user = client.data.user;
+    if (!user) return;
+    client.to(data.salaId).emit('peer-joined-audio', {
+      userId: user.userId,
+      displayName: user.displayName,
+      role: user.role,
+    });
+  }
+
+  @SubscribeMessage('leave-audio')
+  handleLeaveAudio(@ConnectedSocket() client: Socket, @MessageBody() data: { salaId: string }) {
+    const user = client.data.user;
+    if (!user) return;
+    client.to(data.salaId).emit('peer-left-audio', { userId: user.userId });
+  }
+
+  @SubscribeMessage('webrtc-offer')
+  handleWebrtcOffer(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { targetUserId: string; offer: any },
+  ) {
+    const user = client.data.user;
+    if (!user) return;
+    const targetSocketId = this.userSockets.get(data.targetUserId);
+    if (targetSocketId) {
+      this.server.to(targetSocketId).emit('webrtc-offer', {
+        fromUserId: user.userId,
+        fromDisplayName: user.displayName,
+        offer: data.offer,
+      });
+    }
+  }
+
+  @SubscribeMessage('webrtc-answer')
+  handleWebrtcAnswer(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { targetUserId: string; answer: any },
+  ) {
+    const user = client.data.user;
+    if (!user) return;
+    const targetSocketId = this.userSockets.get(data.targetUserId);
+    if (targetSocketId) {
+      this.server.to(targetSocketId).emit('webrtc-answer', {
+        fromUserId: user.userId,
+        answer: data.answer,
+      });
+    }
+  }
+
+  @SubscribeMessage('webrtc-ice-candidate')
+  handleIceCandidate(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { targetUserId: string; candidate: any },
+  ) {
+    const user = client.data.user;
+    if (!user) return;
+    const targetSocketId = this.userSockets.get(data.targetUserId);
+    if (targetSocketId) {
+      this.server.to(targetSocketId).emit('webrtc-ice-candidate', {
+        fromUserId: user.userId,
+        candidate: data.candidate,
+      });
+    }
+  }
+
+  @SubscribeMessage('force-mute')
+  handleForceMute(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { salaId: string; targetUserId: string },
+  ) {
+    const user = client.data.user;
+    if (!user || user.role !== 'teacher') {
+      client.emit('app-error', { message: 'Only teachers can mute participants' });
+      return;
+    }
+    const targetSocketId = this.userSockets.get(data.targetUserId);
+    if (targetSocketId) {
+      this.server.to(targetSocketId).emit('force-muted', {});
+    }
+    this.server.to(data.salaId).emit('participant-muted', { userId: data.targetUserId });
   }
 }
