@@ -3,10 +3,14 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { Resend } from 'resend';
 import { User } from '../schemas/user.schema';
 
 @Injectable()
 export class AuthService {
+  private resend = new Resend(process.env.RESEND_API_KEY);
+  private backendUrl = 'https://quran-backend-production-fca4.up.railway.app';
+
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
     private jwtService: JwtService,
@@ -128,6 +132,59 @@ export class AuthService {
     });
 
     return this.generateToken(user);
+  }
+
+  async requestPasswordReset(email: string) {
+    const user = await this.userModel.findOne({ email });
+    const genericMessage = { message: 'If that email exists, a reset link has been sent.' };
+
+    if (!user) return genericMessage;
+    if (!user.password_hash) {
+      return { message: 'This account uses Google sign-in. Please use "Sign in with Google" instead.' };
+    }
+
+    const resetToken = this.jwtService.sign(
+      { sub: user._id, purpose: 'password_reset' },
+      { expiresIn: '30m' },
+    );
+    const resetLink = this.backendUrl + '/auth/reset-password?token=' + resetToken;
+
+    const htmlBody =
+      '<h2>Password Reset / إعادة تعيين كلمة المرور</h2>' +
+      '<p>Click the link below to reset your password. This link expires in 30 minutes.</p>' +
+      '<p><a href="' + resetLink + '">' + resetLink + '</a></p>' +
+      '<p>إذا لم تطلب هذا، تجاهل هذه الرسالة.</p>';
+
+    await this.resend.emails.send({
+      from: 'onboarding@resend.dev',
+      to: email,
+      subject: 'Password Reset - Quran Platform',
+      html: htmlBody,
+    });
+
+    return genericMessage;
+  }
+
+  async confirmPasswordReset(token: string, newPassword: string) {
+    let payload: any;
+    try {
+      payload = this.jwtService.verify(token);
+    } catch (e) {
+      throw new BadRequestException('Invalid or expired reset link');
+    }
+    if (payload.purpose !== 'password_reset') {
+      throw new BadRequestException('Invalid token');
+    }
+
+    const user = await this.userModel.findById(payload.sub);
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+
+    user.password_hash = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    return { success: true };
   }
 
   private generateToken(user: any) {
