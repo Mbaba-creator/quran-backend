@@ -1,4 +1,4 @@
-import {
+﻿import {
   WebSocketGateway,
   WebSocketServer,
   SubscribeMessage,
@@ -352,4 +352,3 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.to(data.salaId).emit('participant-mute-changed', { userId: data.targetUserId, muted: data.muted });
   }
 }
-
