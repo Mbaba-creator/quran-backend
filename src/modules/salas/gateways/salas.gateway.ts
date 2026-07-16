@@ -266,6 +266,26 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return { success: true, reportId: report._id };
   }
 
+  @SubscribeMessage('get-teacher-profile')
+  async handleGetTeacherProfile(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { teacherId: string },
+  ) {
+    const user = client.data.user;
+    if (!user) return { error: 'Not authenticated' };
+    if (!data.teacherId) return { error: 'No teacher specified' };
+
+    const teacher = await this.userModel.findById(data.teacherId);
+    if (!teacher) return { error: 'Teacher not found' };
+
+    return {
+      displayName: teacher.display_name,
+      hasTaughtBefore: teacher.hasTaughtBefore,
+      isHafiz: teacher.isHafiz,
+      teacherExperience: teacher.teacherExperience,
+    };
+  }
+
   // ===== WebRTC signaling relay (mesh, small groups) =====
 
   @SubscribeMessage('join-audio')
