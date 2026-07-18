@@ -64,6 +64,7 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
         email: user.email,
         role: user.role,
         gender: user.gender,
+        isAdmin: user.isAdmin || false,
       };
 
       this.userSockets.set(client.data.user.userId, client.id);
@@ -284,6 +285,74 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
       isHafiz: teacher.isHafiz,
       teacherExperience: teacher.teacherExperience,
     };
+  }
+
+  // ===== Admin panel =====
+
+  @SubscribeMessage('admin-get-reports')
+  async handleAdminGetReports(@ConnectedSocket() client: Socket) {
+    const user = client.data.user;
+    if (!user || !user.isAdmin) {
+      client.emit('app-error', { message: 'Admin access required' });
+      return { error: 'Forbidden' };
+    }
+    return await this.salasService.getAllReports();
+  }
+
+  @SubscribeMessage('admin-resolve-report')
+  async handleAdminResolveReport(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { reportId: string },
+  ) {
+    const user = client.data.user;
+    if (!user || !user.isAdmin) {
+      client.emit('app-error', { message: 'Admin access required' });
+      return { error: 'Forbidden' };
+    }
+    return await this.salasService.resolveReport(data.reportId);
+  }
+
+  @SubscribeMessage('admin-get-users')
+  async handleAdminGetUsers(@ConnectedSocket() client: Socket) {
+    const user = client.data.user;
+    if (!user || !user.isAdmin) {
+      client.emit('app-error', { message: 'Admin access required' });
+      return { error: 'Forbidden' };
+    }
+    const users = await this.userModel.find().select('-password_hash').sort({ created_at: -1 });
+    return users;
+  }
+
+  @SubscribeMessage('admin-set-ban')
+  async handleAdminSetBan(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { userId: string; isBanned: boolean; banReason?: string },
+  ) {
+    const user = client.data.user;
+    if (!user || !user.isAdmin) {
+      client.emit('app-error', { message: 'Admin access required' });
+      return { error: 'Forbidden' };
+    }
+    const target = await this.userModel.findByIdAndUpdate(
+      data.userId,
+      { isBanned: data.isBanned, banReason: data.isBanned ? (data.banReason || 'Violation of community guidelines') : null },
+      { new: true },
+    );
+    return { success: true, userId: data.userId, isBanned: target ? target.isBanned : data.isBanned };
+  }
+
+  @SubscribeMessage('admin-set-role')
+  async handleAdminSetRole(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { userId: string; role: 'student' | 'teacher' },
+  ) {
+    const user = client.data.user;
+    if (!user || !user.isAdmin) {
+      client.emit('app-error', { message: 'Admin access required' });
+      return { error: 'Forbidden' };
+    }
+    const target = await this.userModel.findByIdAndUpdate(data.userId, { role: data.role }, { new: true });
+    return { success: true, userId: data.userId, role: target ? target.role : data.role };
   }
 
   // ===== WebRTC signaling relay (mesh, small groups) =====

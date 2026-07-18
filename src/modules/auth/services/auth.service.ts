@@ -1,4 +1,4 @@
-﻿import { Injectable, BadRequestException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import { Injectable, BadRequestException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { JwtService } from '@nestjs/jwt';
@@ -150,10 +150,10 @@ export class AuthService {
     const resetLink = this.backendUrl + '/auth/reset-password?token=' + resetToken;
 
     const htmlBody =
-      '<h2>Password Reset / إعادة تعيين كلمة المرور</h2>' +
+      '<h2>Password Reset / ????? ????? ???? ??????</h2>' +
       '<p>Click the link below to reset your password. This link expires in 30 minutes.</p>' +
       '<p><a href="' + resetLink + '">' + resetLink + '</a></p>' +
-      '<p>إذا لم تطلب هذا، تجاهل هذه الرسالة.</p>';
+      '<p>??? ?? ???? ???? ????? ??? ???????.</p>';
 
     await this.resend.emails.send({
       from: 'onboarding@resend.dev',
@@ -197,7 +197,9 @@ export class AuthService {
         display_name: user.display_name,
         role: user.role,
         gender: user.gender,
+        isAdmin: user.isAdmin || false,
       },
     };
   }
 }
+

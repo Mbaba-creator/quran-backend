@@ -42,6 +42,9 @@ export class User extends Document {
   @Prop({ default: null })
   banReason: string;
 
+  @Prop({ default: false })
+  isAdmin: boolean;
+
   @Prop({ default: Date.now })
   created_at: Date;
 

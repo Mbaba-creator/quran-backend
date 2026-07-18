@@ -141,4 +141,12 @@ export class SalasService {
     });
     return report;
   }
+
+  async getAllReports() {
+    return await this.reportModel.find().sort({ createdAt: -1 });
+  }
+
+  async resolveReport(reportId: string) {
+    return await this.reportModel.findByIdAndUpdate(reportId, { status: 'resolved' }, { new: true });
+  }
 }
