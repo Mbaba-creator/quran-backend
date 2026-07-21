@@ -1,4 +1,4 @@
-﻿import {
+import {
   WebSocketGateway,
   WebSocketServer,
   SubscribeMessage,
@@ -106,6 +106,9 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
       language: string;
       parentId?: string | null;
       surahName?: string | null;
+      scheduledDays?: number[];
+      scheduledTime?: string | null;
+      scheduledTimezone?: string | null;
     },
   ) {
     const user = client.data.user;
@@ -123,6 +126,9 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
       user.gender,
       data.parentId || null,
       data.surahName || null,
+      data.scheduledDays || [],
+      data.scheduledTime || null,
+      data.scheduledTimezone || null,
     );
     this.server.emit('sala-created', sala);
     return sala;
@@ -441,3 +447,4 @@ export class SalasGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.to(data.salaId).emit('participant-mute-changed', { userId: data.targetUserId, muted: data.muted });
   }
 }
+

@@ -23,6 +23,9 @@ export class SalasService {
     gender: 'men' | 'women',
     parentId: string | null = null,
     surahName: string | null = null,
+    scheduledDays: number[] = [],
+    scheduledTime: string | null = null,
+    scheduledTimezone: string | null = null,
   ) {
     const sala = await this.salaModel.create({
       name,
@@ -34,6 +37,9 @@ export class SalasService {
       parentId: parentId ? new Types.ObjectId(parentId) : null,
       status: 'scheduled',
       isLive: false,
+      scheduledDays,
+      scheduledTime,
+      scheduledTimezone,
       members: new Map(),
     });
     return sala;

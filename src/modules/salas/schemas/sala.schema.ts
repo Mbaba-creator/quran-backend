@@ -1,4 +1,4 @@
-import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+﻿import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
 @Schema()
@@ -33,6 +33,15 @@ export class Sala extends Document {
   @Prop({ default: null })
   topic: string;
 
+  @Prop({ type: [Number], default: [] })
+  scheduledDays: number[];
+
+  @Prop({ type: String, default: null })
+  scheduledTime: string | null;
+
+  @Prop({ type: String, default: null })
+  scheduledTimezone: string | null;
+
   @Prop({ type: Map, of: String, default: new Map() })
   members: Map<string, string>;
 
@@ -44,5 +53,3 @@ export class Sala extends Document {
 }
 
 export const SalaSchema = SchemaFactory.createForClass(Sala);
-
-
